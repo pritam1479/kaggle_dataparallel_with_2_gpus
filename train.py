@@ -16,12 +16,12 @@ from config import get_config, get_weights_file_path, latest_weights_file_path
 from dataset import BilungualDataset, causal_mask
 from model import build_transformer
 
-def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_len, device):
+def greedy_decode(model_for_ops, source, source_mask, tokenizer_src, tokenizer_tgt, max_len, device):
     sos_idx = tokenizer_tgt.token_to_id('[SOS]')
     eos_idx = tokenizer_tgt.token_to_id('[EOS]')
 
     # Precompute the encode output and reuse it for every step
-    encode_output = model.encode(source, source_mask)
+    encode_output = model_for_ops.encode(source, source_mask)
     
     # Initialize the decode input with the sos token
     decode_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
@@ -34,7 +34,7 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
         decode_mask = causal_mask(decode_input.size(1)).type_as(source_mask).to(device) #(1, 1, seq_len, seq_len)
         
         # Get decode output
-        out = model.decode(
+        out = model_for_ops.decode(
             encode_output,                                  # memory from encode
             source_mask,  # embedded decode input
             decode_input,                              # source mask for cross-attention
@@ -42,7 +42,7 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
         )
         
         # Get the next token
-        prob = model.project(out[:, -1])  # (1, vocab_size)
+        prob = model_for_ops.project(out[:, -1])  # (1, vocab_size)
         _, next_word = torch.max(prob, dim=1)
         
         decode_input = torch.cat(
