@@ -21,7 +21,7 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
     eos_idx = tokenizer_tgt.token_to_id('[EOS]')
 
     # Precompute the encode output and reuse it for every step
-    encode_output = model.encode(source, source_mask)
+    encode_output = model.module.encode(source, source_mask)
     
     # Initialize the decode input with the sos token
     decode_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
@@ -34,7 +34,7 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
         decode_mask = causal_mask(decode_input.size(1)).type_as(source_mask).to(device) #(1, 1, seq_len, seq_len)
         
         # Get decode output
-        out = model.decode(
+        out = model.module.decode(
             encode_output,                                  # memory from encode
             source_mask,  # embedded decode input
             decode_input,                              # source mask for cross-attention
@@ -42,7 +42,7 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
         )
         
         # Get the next token
-        prob = model.project(out[:, -1])  # (1, vocab_size)
+        prob = model.module.project(out[:, -1])  # (1, vocab_size)
         _, next_word = torch.max(prob, dim=1)
         
         decode_input = torch.cat(
@@ -55,8 +55,8 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
             
     return decode_input.squeeze(0)
 
-def run_validation(model_for_ops, validation_ds, tokenizer_src, tokenizer_tgt, max_len, device, print_msg, global_step, writer, num_examples=2):
-    model_for_ops.eval()
+def run_validation(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, device, print_msg, global_step, writer, num_examples=2):
+    model.eval()
     count = 0
 
     source_texts = []
@@ -87,7 +87,7 @@ def run_validation(model_for_ops, validation_ds, tokenizer_src, tokenizer_tgt, m
             assert encode_input.size(
                 0) == 1, "Batch size must be 1 for validation"
 
-            model_out = greedy_decode(model_for_ops, encode_input, encode_mask, tokenizer_src, tokenizer_tgt, max_len, device)
+            model_out = greedy_decode(model, encode_input, encode_mask, tokenizer_src, tokenizer_tgt, max_len, device)
 
             source_text = batch["src_text"][0]
             target_text = batch["tgt_text"][0]
@@ -198,12 +198,6 @@ def train_model(config):
         model = nn.DataParallel(model)
         model = model.to(device)
 
-    # ...after model creation...
-    if isinstance(model, nn.DataParallel):
-        model_for_ops = model.module
-    else:
-        model_for_ops = model
-
     # Tensorboard
     writer = SummaryWriter(config['experiment_name'])
 
@@ -238,14 +232,14 @@ def train_model(config):
             decode_mask = batch["decoder_attention_mask"].to(device) #(B, 1, seq_len, seq_len)
 
             # Run the tensors through the model
-            encode_output = model_for_ops.encode(enc_inputs, encode_mask) #(B, seq_len, d_model)
-            decode_output = model_for_ops.decode(
+            encode_output = model.module.encode(enc_inputs, encode_mask) #(B, seq_len, d_model)
+            decode_output = model.module.decode(
                 encode_output,                                 
                 encode_mask,
                 dec_inputs,                                
                 decode_mask                           
             ) #(B, seq_len, d_model)
-            proj_output = model_for_ops.project(decode_output)
+            proj_output = model.module.project(decode_output)
 
             labels = batch["label"].to(device) #(B, seq_len)
             # (B*seq_len, vocab_tgt_size), (B*seq_len)
@@ -262,7 +256,7 @@ def train_model(config):
 
             global_step += 1
 
-            run_validation(model_for_ops, val_dataloader, tokenizer_src, tokenizer_tgt, config['max_seq_length'], device, lambda msg: batch_iterator.write(msg), global_step, writer, num_examples=2)
+            run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt, config['max_seq_length'], device, lambda msg: batch_iterator.write(msg), global_step, writer, num_examples=2)
 
         # Save model checkpoint
         model_filename = get_weights_file_path(config, f'{epoch:02d}')
