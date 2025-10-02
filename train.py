@@ -262,7 +262,7 @@ def train_model(config):
 
             global_step += 1
 
-            run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt, config['max_seq_length'], device, lambda msg: batch_iterator.write(msg), global_step, writer, num_examples=2)
+            run_validation(model_for_ops, val_dataloader, tokenizer_src, tokenizer_tgt, config['max_seq_length'], device, lambda msg: batch_iterator.write(msg), global_step, writer, num_examples=2)
 
         # Save model checkpoint
         model_filename = get_weights_file_path(config, f'{epoch:02d}')
