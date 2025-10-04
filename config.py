@@ -5,7 +5,7 @@ def get_config():
         # 'datasource':"Helsinki-NLP/opus_books",
         'datasource':"Helsinki-NLP/opus-100",
         'source_lang': 'en',
-        'target_lang': 'it',
+        # 'target_lang': 'it',
         'target_lang': 'hi',
         'tokenizer_file': 'tokenizer_{lang}.json',
         # 'max_seq_length': 350,
